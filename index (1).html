@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex,nofollow">
+<title>Одноразовая секретная заметка</title>
+<style>
+:root{--bg:#f4f5f7;--card:#fff;--text:#1b1f27;--muted:#5d6675;--line:#dfe3ea;--accent:#2b6cf0;--bad:#d93a3a;--badbg:#fdeaea;--good:#1f9d55;--goodbg:#e6f6ec;--code:#eef1f6;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#12151b;--card:#1b2029;--text:#e8ebf1;--muted:#98a2b3;--line:#2c3340;--accent:#6b9cff;--bad:#ff7070;--badbg:#3a1f22;--good:#4cc784;--goodbg:#173323;--code:#12161d}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:560px;margin:0 auto;padding:20px 16px 40px}
+h1{font-size:22px;margin:0 0 4px}
+.sub{color:var(--muted);margin:0 0 16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:14px}
+label{display:block;font-weight:600;margin:12px 0 6px}
+textarea,select{width:100%;font:inherit;color:var(--text);background:var(--code);border:1px solid var(--line);border-radius:10px;padding:10px}
+textarea{min-height:120px;resize:vertical}
+button{font:inherit;font-weight:600;border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:10px;padding:10px 14px;cursor:pointer}
+button.primary{background:var(--accent);color:#fff;border-color:var(--accent);width:100%;margin-top:14px}
+button:disabled{opacity:.5}
+.msg{border-radius:10px;padding:10px 12px;margin-top:12px}
+.msg.bad{background:var(--badbg);color:var(--bad)}
+.msg.good{background:var(--goodbg);color:var(--good)}
+.out{background:var(--code);border-radius:10px;padding:12px;white-space:pre-wrap;word-break:break-all;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:14px}
+.hide{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🔥 Одноразовая секретная заметка</h1>
+  <p class="sub">Шифруется в вашем браузере. После прочтения запись удаляется.</p>
+
+  <div id="make" class="card">
+    <label for="secret">Секрет</label>
+    <textarea id="secret" placeholder="Пароль, токен, ключ или личное сообщение"></textarea>
+    <label for="ttl">Хранить, если не прочитают</label>
+    <select id="ttl"><option value="60">1 час</option><option value="1440" selected>24 часа</option><option value="10080">7 дней</option></select>
+    <button class="primary" id="create">Создать ссылку</button>
+    <div id="mmsg" class="msg hide"></div>
+    <div id="result" class="hide">
+      <label>Ссылка для получателя</label>
+      <div class="out" id="link"></div>
+      <button id="copy" type="button" style="margin-top:8px">Скопировать ссылку</button>
+      <p class="sub" style="margin-top:10px">Ссылка работает один раз. Ключ шифрования находится только в ней, на сервер он не попадает.</p>
+    </div>
+  </div>
+
+  <div id="read" class="card hide">
+    <b>Вам отправили секретную заметку</b>
+    <p class="sub">После нажатия кнопки заметка будет показана и сразу удалена. Повторно открыть её не получится.</p>
+    <button class="primary" id="open">Показать и уничтожить</button>
+    <div id="rmsg" class="msg hide"></div>
+    <div id="shown" class="hide">
+      <label>Секрет</label>
+      <div class="out" id="plain"></div>
+      <button id="copy2" type="button" style="margin-top:8px">Скопировать</button>
+      <p class="sub" style="margin-top:12px">Запись уже удалена. Сохраните секрет сейчас.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+// ВСТАВЬТЕ свои значения из Supabase: Project Settings → API
+var SUPABASE_URL = "https://pkurgphlohpwfuwnstdv.supabase.co.";
+var SUPABASE_ANON_KEY = "sb_publishable__Ndtp0N4lLjSScrR-F1POQ_8rP3MaRn";
+
+var $ = function (i) { return document.getElementById(i); };
+var te = new TextEncoder(), td = new TextDecoder();
+function say(id, t, c) { var e = $(id); e.textContent = t; e.className = "msg " + c; }
+function toB64u(buf) { var s = ""; new Uint8Array(buf).forEach(function (c) { s += String.fromCharCode(c); }); return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); }
+function fromB64u(s) { s = s.replace(/-/g, "+").replace(/_/g, "/"); while (s.length % 4) s += "="; var r = atob(s), u = new Uint8Array(r.length); for (var i = 0; i < r.length; i++) u[i] = r.charCodeAt(i); return u; }
+async function rpc(fn, body) {
+  var h = { "Content-Type": "application/json", apikey: SUPABASE_ANON_KEY };
+  if (SUPABASE_ANON_KEY.indexOf("eyJ") === 0) h.Authorization = "Bearer " + SUPABASE_ANON_KEY;
+  var r = await fetch(SUPABASE_URL + "/rest/v1/rpc/" + fn, {
+    method: "POST",
+    headers: h,
+    body: JSON.stringify(body)
+  });
+  if (!r.ok) throw new Error("server " + r.status);
+  return r.json();
+}
+var parts = location.hash.slice(1).split(".");
+var isRead = parts.length === 2 && /^[0-9a-f-]{36}$/.test(parts[0]) && parts[1].length > 20;
+$("read").classList.toggle("hide", !isRead);
+$("make").classList.toggle("hide", isRead);
+
+async function copy(t, b) { try { await navigator.clipboard.writeText(t); b.textContent = "Скопировано"; } catch (e) { b.textContent = "Скопируйте вручную"; } }
+$("copy").onclick = function () { copy($("link").textContent, $("copy")); };
+$("copy2").onclick = function () { copy($("plain").textContent, $("copy2")); };
+
+$("create").onclick = async function () {
+  var s = $("secret").value, btn = $("create");
+  if (!s.trim()) return say("mmsg", "Введите секрет.", "bad");
+  btn.disabled = true; say("mmsg", "Шифруем…", "good");
+  try {
+    var k = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, true, ["encrypt"]);
+    var iv = crypto.getRandomValues(new Uint8Array(12));
+    var ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv: iv }, k, te.encode(s));
+    var raw = await crypto.subtle.exportKey("raw", k);
+    var id = await rpc("create_note", { p_ct: toB64u(ct), p_iv: toB64u(iv), p_ttl_minutes: Number($("ttl").value) });
+    $("link").textContent = location.origin + location.pathname + "#" + id + "." + toB64u(raw);
+    $("result").classList.remove("hide"); $("secret").value = "";
+    say("mmsg", "Готово.", "good");
+  } catch (e) { say("mmsg", "Не удалось создать заметку: " + e.message, "bad"); }
+  finally { btn.disabled = false; }
+};
+
+$("open").onclick = async function () {
+  var btn = $("open"); btn.disabled = true; say("rmsg", "Открываем…", "good");
+  try {
+    var rows = await rpc("read_note", { p_id: parts[0] });
+    if (!rows.length) { say("rmsg", "Заметка не найдена: её уже прочитали, она истекла или ссылка неверна.", "bad"); return; }
+    try {
+      var k = await crypto.subtle.importKey("raw", fromB64u(parts[1]), "AES-GCM", false, ["decrypt"]);
+      var pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv: fromB64u(rows[0].iv) }, k, fromB64u(rows[0].ciphertext));
+      $("plain").textContent = td.decode(pt);
+    } catch (e) { say("rmsg", "Ссылка повреждена: ключ не подошёл. Заметка уже удалена, попросите отправить новую.", "bad"); return; }
+    history.replaceState(null, "", location.pathname);
+    $("shown").classList.remove("hide"); $("rmsg").className = "msg hide"; btn.classList.add("hide");
+  } catch (e) { say("rmsg", "Ошибка: " + e.message, "bad"); }
+  finally { btn.disabled = false; }
+};
+</script>
+</body>
+</html>
